@@ -2,6 +2,7 @@ package com.johnsonautoparts;
 
 import java.io.*;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -18,6 +19,7 @@ import javax.servlet.http.HttpSession;
 
 import com.johnsonautoparts.exception.AppException;
 import com.johnsonautoparts.logger.AppLogger;
+import org.owasp.encoder.Encode;
 
 /**
  * 
@@ -55,16 +57,15 @@ public class Project1 extends Project {
 	 */
 	public String normalizeString(String str) {
 		Pattern pattern = Pattern.compile("[<&>]");
-		Matcher matcher = pattern.matcher(str);
-		String cleanStr = str;
+		String cleanStr = Normalizer.normalize(str, Form.NFKC);
+		Matcher matcher = pattern.matcher(cleanStr);
 
 		// variable str is potentially dirty with HTML or JavaScript tags
 		if (matcher.find()) {
-			cleanStr = str.replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+			cleanStr = cleanStr.replaceAll("&", "&amp;").replaceAll("<", "&lt;")
 					.replaceAll(">", "&gt;");
 		}
 
-		cleanStr = Normalizer.normalize(cleanStr, Form.NFKC);
 		return cleanStr;
 	}
 
@@ -85,7 +86,7 @@ public class Project1 extends Project {
 		Calendar cal = new GregorianCalendar();
 
 		// return the string with the calendar entry
-		return String.format(str + " passed on date %tF", cal);
+		return String.format("%s passed on date %tF", str, cal);
 	}
 
 	/**
@@ -106,6 +107,8 @@ public class Project1 extends Project {
 	 */
 	public String validateString(String str) throws AppException {
 		String s = Normalizer.normalize(str, Form.NFKC);
+		// Deletes noncharacter code points
+		s = s.replaceAll("[\\p{Cn}]", "");
 
 		// Simple pattern match to remove <script> tag
 		Pattern pattern = Pattern.compile("<script>");
@@ -115,9 +118,7 @@ public class Project1 extends Project {
 			throw new AppException("validateString() identified script tag",
 					"Invalid input");
 		}
-
-		// Deletes noncharacter code points
-		return s.replaceAll("[\\p{Cn}]", "");
+		return s;
 	}
 
 	/**
@@ -135,6 +136,7 @@ public class Project1 extends Project {
 	 * @return boolean
 	 */
 	public boolean regularExpression(String search) {
+		search = Pattern.quote(search);
 		String regex = "(.* password\\[\\w+\\]" + search + ".*)";
 		Pattern searchPattern = Pattern.compile(regex);
 
@@ -177,7 +179,7 @@ public class Project1 extends Project {
 	 */
 	public boolean internationalization(String str) throws AppException {
 		// check for script tag
-		if (str.toLowerCase().contains("script")) {
+		if (str.toLowerCase(Locale.ENGLISH).contains("script")) {
 			throw new AppException("internationalization() found script tag");
 		}
 
@@ -189,10 +191,9 @@ public class Project1 extends Project {
 			throw new AppException("IOException in internationaliation(): "
 					+ ioe.getMessage());
 		}
-
 		// write the text to file
-		try (PrintWriter writer = new PrintWriter(
-				new FileWriter(tempFile.toFile()))) {
+
+		try (PrintWriter writer = new PrintWriter(new OutputStreamWriter(new FileOutputStream(tempFile.toFile()), StandardCharsets.UTF_8))) {
 			writer.printf("Passed text: %s", str);
 			return true;
 		} catch (IOException ioe) {
@@ -217,6 +218,7 @@ public class Project1 extends Project {
 	 * @param unsanitizedText
 	 */
 	public void logUnsanitizedText(String unsanitizedText) {
+		/*AppLogger internally do the sanitization*/
 		AppLogger.log("Error: " + unsanitizedText);
 
 	}
@@ -245,8 +247,11 @@ public class Project1 extends Project {
 	 */
 	public String regexClean(String str) {
 		String cleanText = str.toLowerCase(Locale.ENGLISH);
-		cleanText = cleanText.replace("script", "");
-
+		String replaced = cleanText.replace("script", "");
+		while(!cleanText.equals(replaced)) {
+			cleanText = replaced;
+			replaced = cleanText.replace("script", "");
+		}
 		return cleanText;
 	}
 
@@ -532,7 +537,7 @@ public class Project1 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute MSC02-J
 	 * 
-	 * @param num
+	 * @param range
 	 * @return boolean
 	 */
 	public int randomNumGenerate(int range) {
