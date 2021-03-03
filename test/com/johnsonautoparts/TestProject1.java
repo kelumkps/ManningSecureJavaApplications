@@ -3,6 +3,8 @@ package com.johnsonautoparts;
 import com.johnsonautoparts.exception.AppException;
 import org.owasp.encoder.Encode;
 
+import java.math.BigInteger;
+import java.util.Base64;
 import java.util.regex.Pattern;
 
 public class TestProject1 {
@@ -12,7 +14,9 @@ public class TestProject1 {
 //        normalizeString();
 //        formatString();
 //        validateString();
-        regexClean();
+//        regexClean();
+      //  decodeBase64();
+        cleanBadHTMLTags();
     }
 
     private static void normalizeString() {
@@ -56,5 +60,17 @@ public class TestProject1 {
     private static void regexClean() {
         System.out.println(project1.regexClean("<SCRISCRIscriptPTPT>"));
         System.out.println(Encode.forHtml("<SCRIscriptPT>"));
+    }
+
+    private static void decodeBase64() {
+        BigInteger x = new BigInteger("530500452766");
+        byte[] byteArray = x.toByteArray();
+        String s = Base64.getEncoder().encodeToString(byteArray);
+        System.out.println(project1.decodeBase64(s));
+    }
+
+    private static void cleanBadHTMLTags() {
+        System.out.println(project1.cleanBadHTMLTags("<script>alert('XSS')</script>"));
+        System.out.println(project1.cleanBadHTMLTags("%253Cscript%253Ealert('XSS')%253C%252Fscript%253E"));
     }
 }

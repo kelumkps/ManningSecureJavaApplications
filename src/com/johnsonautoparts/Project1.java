@@ -278,8 +278,6 @@ public class Project1 extends Project {
 					"variableWidthEncoding was given and invalid path");
 		}
 
-		StringBuilder readSb = new StringBuilder();
-
 		// read the file contents
 		try (FileInputStream fios = new FileInputStream(path.toString())) {
 			byte[] data = new byte[1024 + 1];
@@ -289,14 +287,12 @@ public class Project1 extends Project {
 			// append the data into the string
 			while ((bytesRead = fios.read(data, offset,
 					data.length - offset)) != -1) {
-				readSb.append(new String(data, offset, bytesRead));
 				offset += bytesRead;
 				if (offset >= data.length) {
 					throw new IOException("Too much input");
 				}
 			}
-
-			return readSb.toString();
+			return new String(data, 0, offset, StandardCharsets.UTF_8);
 		} catch (IOException ioe) {
 			throw new AppException(
 					"Caught exception reading file: " + ioe.getMessage());
@@ -324,13 +320,8 @@ public class Project1 extends Project {
 	public BigInteger decodeBase64(String base64Str) {
 		// decode base64 to String representation of BigInt
 		byte[] decodedBytes = Base64.getDecoder().decode(base64Str);
-
-		// convert bytes to string
-		String s = Arrays.toString(decodedBytes);
-		byte[] byteArray = s.getBytes();
-
 		// convert string bytes to BigInt
-		return new BigInteger(byteArray);
+		return new BigInteger(decodedBytes);
 	}
 
 	/**
@@ -356,19 +347,7 @@ public class Project1 extends Project {
 	 * @return String
 	 */
 	public String cleanBadHTMLTags(String str) {
-		Pattern pattern = Pattern.compile("[<&>]");
-		Matcher matcher = pattern.matcher(str);
-
-		String cleanStr = str;
-
-		// variable str is potentially dirty with HTML or JavaScript tags so
-		// remove left, right, or amp
-		if (matcher.find()) {
-			cleanStr = str.replaceAll("&", "&amp;").replaceAll("<", "&lt;")
-					.replaceAll(">", "&gt;");
-		}
-
-		return cleanStr;
+		return Encode.forHtml(str);
 	}
 
 	/**
@@ -392,7 +371,7 @@ public class Project1 extends Project {
 				byte[] data = new byte[1024];
 				dis.readFully(data);
 
-				return new String(data);
+				return new String(data, StandardCharsets.UTF_8);
 			}
 		} catch (IOException ioe) {
 			throw new AppException(
