@@ -1,12 +1,14 @@
 package com.johnsonautoparts;
 
 import java.io.*;
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.SecureRandom;
 import java.sql.Connection;
 import java.text.Normalizer;
 import java.text.Normalizer.Form;
@@ -397,8 +399,8 @@ public class Project1 extends Project {
 		int multiplier = 2;
 		int addedCost = 12;
 
-		int addCost = num + addedCost;
-		int multiCost = num * multiplier;
+		int addCost = safeAdd(num, addedCost);
+		int multiCost = safeMultiply(num, multiplier);
 
 		// return the great of the add or multiply
 		if (addCost > multiCost) {
@@ -407,6 +409,26 @@ public class Project1 extends Project {
 			return multiCost;
 		}
 
+	}
+
+	private final int safeAdd(int left, int right) {
+		if (right > 0 ? left > Integer.MAX_VALUE - right
+				: left < Integer.MIN_VALUE - right) {
+			throw new ArithmeticException("Integer overflow");
+		}
+		return left + right;
+	}
+
+	private final int safeMultiply(int left, int right) {
+		if (right > 0 ? left > Integer.MAX_VALUE/right
+				|| left < Integer.MIN_VALUE/right
+				: (right < -1 ? left > Integer.MIN_VALUE/right
+				|| left < Integer.MAX_VALUE/right
+				: right == -1
+				&& left == Integer.MIN_VALUE) ) {
+			throw new ArithmeticException("Integer overflow");
+		}
+		return left * right;
 	}
 
 	/**
@@ -427,7 +449,11 @@ public class Project1 extends Project {
 	public int divideTask(int monthlyTasks) {
 		int monthly = 12;
 
-		return monthly / monthlyTasks;
+		if (monthlyTasks != 0) {
+			return monthly / monthlyTasks;
+		} else {
+			return 0;
+		}
 	}
 
 	/**
@@ -456,7 +482,7 @@ public class Project1 extends Project {
 															// input is infinity
 
 			// check if we received the expected result
-			if (result == Double.NaN) {
+			if (Double.isNaN(result)) {
 				return false;
 			} else {
 				return true;
@@ -484,26 +510,8 @@ public class Project1 extends Project {
 	 * @return boolean
 	 */
 	public boolean numStringCompare(int num) {
-
-		String s = Double.toString(num / 1000.0);
-
-		// check for comparison to validate
-		if (s.equals("0.001")) {
-			return true;
-		}
-		// string data may be in a slightly different format so perform
-		// additional
-		// check if we can match by removing any trailing zeroes
-		else {
-			s = s.replaceFirst("[.0]*$", "");
-			if (s.equals("0.001")) {
-				return true;
-			}
-			// neither check matched so return false
-			else {
-				return false;
-			}
-		}
+		BigDecimal d = new BigDecimal(Double.valueOf(num / 1000.0).toString());
+		return d.compareTo(new BigDecimal("0.001")) == 0;
 	}
 
 	/**
@@ -521,7 +529,7 @@ public class Project1 extends Project {
 	 */
 	public int randomNumGenerate(int range) {
 		// seed the random number generator
-		Random number = new Random(99L);
+		SecureRandom number = new SecureRandom();
 
 		// generate a random number based on the range given
 		return number.nextInt(range);
