@@ -21,6 +21,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -196,9 +197,6 @@ public class Project3 extends Project {
 			accessed = (Integer) accessedObj;
 		}
 
-		// increment the docs_accessed in the session attribute
-		session.setAttribute(SessionConstant.DOCS_ACCESSED, accessed + 1);
-
 		// get the content from the database
 		try {
 			String sql = "SELECT content FROM docs WHERE id = ?";
@@ -221,7 +219,14 @@ public class Project3 extends Project {
 
 					// return the count
 					if (rs.next()) {
-						return rs.getString(1);
+						String result = rs.getString(1);
+						if (Objects.nonNull(result)) {
+							// increment the docs_accessed in the session attribute
+							session.setAttribute(SessionConstant.DOCS_ACCESSED, accessed + 1);
+							return result;
+						} else {
+							throw new AppException("restoreState return null result");
+						}
 					} else {
 						throw new AppException(
 								"restoreState did not return any results");
@@ -260,7 +265,6 @@ public class Project3 extends Project {
 	 * @param query
 	 * @return String
 	 */
-	@SuppressWarnings({"finally", "resource"})
 	public boolean flowHandling(String fileContents) throws Exception {
 		File f = null;
 		BufferedWriter writer = null;
@@ -273,9 +277,16 @@ public class Project3 extends Project {
 			throw new AppException(
 					"flowHandling caught IO exception: " + ioe.getMessage());
 		} finally {
-			writer.close();
-			return true;
+			if (writer != null) {
+				try {
+					writer.close();
+				} catch (IOException e) {
+					AppLogger.log("flowHandling failed to close writer: "
+							+ e.getMessage());
+				}
+			}
 		}
+		return true;
 	}
 
 	/**
@@ -293,12 +304,11 @@ public class Project3 extends Project {
 	 * @param query
 	 * @return String
 	 */
-	public String runtimeException(String cmd) throws Exception {
+	public String runtimeException(String cmd) throws AppException {
 		try {
 			// execute the OS command
 			if (!Pattern.matches("[0-9A-Za-z]+", cmd)) {
-				throw new RuntimeException(
-						"exec was passed a cmd with illegal characters");
+				throw new AppException("exec was passed a cmd with illegal characters");
 			}
 
 			// execute the requested command
@@ -307,7 +317,7 @@ public class Project3 extends Project {
 			int result = proc.waitFor();
 
 			if (result != 0) {
-				throw new RuntimeException("process error: " + result);
+				throw new AppException("process error: " + result);
 			}
 			InputStream in = proc.getInputStream();
 
@@ -320,13 +330,10 @@ public class Project3 extends Project {
 			}
 
 			return strBuilder.toString();
-		} catch (RuntimeException re) {
-			throw new Exception(
-					"exec caught runtime error: " + re.getMessage());
 		} catch (IOException ioe) {
-			throw new Exception("exec caught IO error: " + ioe.getMessage());
+			throw new AppException("exec caught IO error: " + ioe.getMessage());
 		} catch (InterruptedException ie) {
-			throw new Exception(
+			throw new AppException(
 					"exec caught interupted error: " + ie.getMessage());
 		}
 	}
@@ -346,13 +353,12 @@ public class Project3 extends Project {
 	 * @param query
 	 * @return String
 	 */
-	public boolean testNull(String str) throws NullPointerException {
-		try {
+	public boolean testNull(String str) throws AppException {
+		if (Objects.nonNull(str)) {
 			// check if str is empty
 			return str.isEmpty();
-		} catch (NullPointerException npe) {
-			AppLogger.log("testNull caught NullPointer");
-			throw new NullPointerException("testNull received null object");
+		} else {
+			throw new AppException("testNull received null object");
 		}
 	}
 
