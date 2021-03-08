@@ -1,15 +1,7 @@
 package com.johnsonautoparts;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -69,7 +61,7 @@ public class Project3 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute ERR00-J
 	 * 
-	 * @param query
+	 * @param str
 	 * @return String
 	 */
 	public boolean suppressException(String str) throws AppException {
@@ -262,7 +254,7 @@ public class Project3 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute ERR004-J, ERR05-J
 	 * 
-	 * @param query
+	 * @param fileContents
 	 * @return String
 	 */
 	public boolean flowHandling(String fileContents) throws Exception {
@@ -301,7 +293,7 @@ public class Project3 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute ERR07-J
 	 * 
-	 * @param query
+	 * @param cmd
 	 * @return String
 	 */
 	public String runtimeException(String cmd) throws AppException {
@@ -350,7 +342,7 @@ public class Project3 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute ERR08-J
 	 * 
-	 * @param query
+	 * @param str
 	 * @return String
 	 */
 	public boolean testNull(String str) throws AppException {
@@ -374,7 +366,7 @@ public class Project3 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute EXP00-J
 	 * 
-	 * @param query
+	 * @param fileName
 	 * @return String
 	 */
 	public String deleteFile(String fileName) throws AppException {
@@ -382,14 +374,17 @@ public class Project3 extends Project {
 			throw new AppException("deleteFile passed a null variable");
 		}
 
-		fileName.replaceAll("\\.", "_");
+		fileName = fileName.replaceAll("\\.", "_");
 		File f = new File(fileName);
 
 		// delete the file
 		try {
-			f.delete();
-
-			return ("Deleted file: " + f.getCanonicalPath());
+			boolean delete = f.delete();
+			if (delete) {
+				return ("Deleted file: " + f.getCanonicalPath());
+			} else {
+				throw new AppException("Unable to delete file: " + f.getCanonicalPath());
+			}
 		} catch (IOException ioe) {
 			throw new AppException(
 					"deleteFile caught IO exception: " + ioe.getMessage());
@@ -408,19 +403,17 @@ public class Project3 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute EXP01-J and EXP54-J
 	 * 
-	 * @param query
+	 * @param str
 	 * @return String
 	 */
 	public String manipulateString(String str) throws AppException {
 		// check if the value is null or empty before manipulating string
-		if (str == null | str.isEmpty()) {
+		if (str == null || str.isEmpty()) {
 			throw new AppException("manipulate string sent null or empty");
 		}
 
 		String manipulated = str.toUpperCase(Locale.ENGLISH);
-		manipulated = manipulated.replaceAll("\\.", "_");
-
-		return manipulated;
+		return manipulated.replaceAll("\\.", "_");
 	}
 
 	/**
@@ -436,17 +429,23 @@ public class Project3 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute FIO02-J
 	 * 
-	 * @param query
+	 * @param fileName
 	 * @return String
 	 */
 	public String detectFileError(String fileName) throws AppException {
+		if (fileName == null || fileName.isEmpty()) {
+			throw new AppException("fileName is null or empty");
+		}
 		final int BUFFER = 1024;
 
 		byte[] data = new byte[BUFFER];
 
 		// read the first 1024 bytes of the file
 		try (FileInputStream fis = new FileInputStream(fileName)) {
-			fis.read(data, 0, BUFFER);
+			int read = fis.read(data, 0, BUFFER);
+			if (read == 0) {
+				throw new AppException("reads zero bytes");
+			}
 
 			// return the data from file read as a string
 			// for this exercise, you can ignore checking if the data read is a
@@ -483,18 +482,23 @@ public class Project3 extends Project {
 	 * pro/con of catching Throwable:
 	 * https://www.baeldung.com/java-catch-throwable-bad-practice
 	 * 
-	 * @param query
+	 * @param str
 	 * @return String
 	 */
-	public void recoverState(String str) {
+	public void recoverState(String str) throws AppException {
 		// create the thread to look for the data_id attribute in the session so
 		// we can
 		// do further processing
 		Runnable checkSessionRunnable = new CheckSession(
 				httpRequest.getSession());
 
-		Thread t = new Thread(checkSessionRunnable);
-		t.start();
+		try {
+			Thread t = new Thread(checkSessionRunnable);
+			t.start();
+		} catch (Throwable throwable) {
+			AppLogger.log("Error while check session : " + throwable.getMessage());
+			throw new AppException("Error while check session");
+		}
 	}
 
 	/**
@@ -550,7 +554,7 @@ public class Project3 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute ERR54-J
 	 * 
-	 * @param query
+	 * @param zipFile
 	 * @return String
 	 */
 	public boolean handleClose(String zipFile)
@@ -604,10 +608,18 @@ public class Project3 extends Project {
 				// clean up and close the resources
 				finally {
 					if (fos != null) {
-						fos.close();
+						try {
+							fos.close();
+						} catch (IOException e) {
+							AppLogger.log("Error while closing fos : " + e.getMessage());
+						}
 					}
 					if (dest != null) {
-						dest.close();
+						try {
+							dest.close();
+						} catch (IOException e) {
+							AppLogger.log("Error while closing dest : " + e.getMessage());
+						}
 					}
 				}
 			}
@@ -621,10 +633,18 @@ public class Project3 extends Project {
 		// clean up the resources used to open the zip file
 		finally {
 			if (fis != null) {
-				fis.close();
+				try {
+					fis.close();
+				} catch (IOException e) {
+					AppLogger.log("Error while closing fix : " + e.getMessage());
+				}
 			}
 			if (zis != null) {
-				zis.close();
+				try {
+					zis.close();
+				} catch (IOException e) {
+					AppLogger.log("Error while closing zis : " + e.getMessage());
+				}
 			}
 		}
 
