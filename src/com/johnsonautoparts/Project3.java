@@ -78,7 +78,9 @@ public class Project3 extends Project {
 		} catch (IOException ioe) {
 			ioe.printStackTrace();
 			AppLogger.log("login IO error: " + ioe.getMessage());
+			throw new AppException("login exception: " + ioe.getMessage());
 		} catch (ServletException se) {
+			AppLogger.log("Servlet Exception: " + se.getMessage());
 			throw new AppException("login exception: " + se.getMessage());
 		}
 
@@ -100,7 +102,7 @@ public class Project3 extends Project {
 	 * @param filePath
 	 * @return String contents of the file or information about the error
 	 */
-	public String dataExposure(String filePath) {
+	public String dataExposure(String filePath) throws AppException {
 		try {
 			Path path = Paths.get(filePath);
 
@@ -112,10 +114,12 @@ public class Project3 extends Project {
 
 				return sb.toString();
 			} catch (IOException ex) {
-				return ("Error reading file: " + ex.getMessage());
+				AppLogger.log("Error reading file: " + ex.getMessage());
+				throw new AppException("Error reading file: " + ex.getMessage());
 			}
 		} catch (InvalidPathException ipe) {
-			return ("Error with requested file: " + ipe.getMessage());
+			AppLogger.log("Error with requested file: " + ipe.getMessage());
+			throw new AppException("Error with requested file: " + ipe.getMessage());
 		}
 
 	}
@@ -134,7 +138,7 @@ public class Project3 extends Project {
 	 * @param userData
 	 * @return String
 	 */
-	public String exceptionLogging(String userData) {
+	public String exceptionLogging(String userData) throws AppException {
 		// get session data
 		try {
 			HttpSession session = httpRequest.getSession();
@@ -149,17 +153,12 @@ public class Project3 extends Project {
 			if (userDataObj instanceof String) {
 				return (String) userDataObj;
 			} else {
-				System.err.println("no user data in session");
-				return null;
+				throw new IllegalStateException("no user data in session");
 			}
 		} catch (IllegalStateException se) {
-			System.err.println(
+			throw new AppException(
 					"getSession() caused IllegalState: " + se.getMessage());
 		}
-
-		// not sure how this point was reached so return null and let the
-		// calling function handle
-		return null;
 	}
 
 	/**
