@@ -13,6 +13,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Base64;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -76,7 +78,7 @@ public class Project2 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute IDS00-J
 	 * 
-	 * @param query
+	 * @param id
 	 * @return String
 	 */
 	public int dbInventory(String id) throws AppException {
@@ -86,10 +88,11 @@ public class Project2 extends Project {
 
 		// execute the SQL and return the count of the inventory
 		try {
-			String sql = "SELECT COUNT(id) FROM inventory WHERE id = " + id;
+			String sql = "SELECT COUNT(id) FROM inventory WHERE id = ?";
 
-			try (Statement stmt = connection.createStatement()) {
-				try (ResultSet rs = stmt.executeQuery(sql)) {
+			try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+				stmt.setString(1, id);
+				try (ResultSet rs = stmt.executeQuery()) {
 
 					if (rs.next()) {
 						return rs.getInt(1);
@@ -138,9 +141,9 @@ public class Project2 extends Project {
 
 		// execute the SQL and return the count of the tasks
 		try {
-			String sql = "SELECT COUNT(task_name) FROM schedule WHERE task_name = '"
-					+ taskName + "'";
+			String sql = "SELECT COUNT(task_name) FROM schedule WHERE task_name = ?";
 			try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+				stmt.setString(1, taskName);
 				try (ResultSet rs = stmt.executeQuery()) {
 
 					if (rs.next()) {
@@ -179,10 +182,13 @@ public class Project2 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute IDS50-J
 	 * 
-	 * @param str
+	 * @param fileName
 	 * @return String
 	 */
 	public void createFile(String fileName) throws AppException {
+		if(!isSafeFileName(fileName)) {
+			throw new AppException("createFile received invalid fileName");
+		}
 		Path tempPath = null;
 		try {
 			tempPath = Paths.get("temp", "upload", fileName);
@@ -214,7 +220,7 @@ public class Project2 extends Project {
 		 * on creating a safe filename
 		 */
 		// check the path
-		String safePathStr = makeSafePath(tempPath.toString());
+		String safePathStr = makeSafePath(tempPath);
 
 		// write the session_data content to the file
 		Path safePath = Paths.get(safePathStr);
@@ -230,6 +236,12 @@ public class Project2 extends Project {
 
 	}
 
+	private boolean isSafeFileName(String filename) {
+		Pattern pattern = Pattern.compile("[^A-Za-z0-9._]");
+		Matcher matcher = pattern.matcher(filename);
+		return !matcher.find();
+	}
+
 	/**
 	 * Project 2, Milestone 1, Task 4
 	 * 
@@ -242,11 +254,30 @@ public class Project2 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute FIO16-J
 	 * 
-	 * @param str
+	 * @param dirty
 	 * @return String
 	 */
-	public String makeSafePath(String dirty) {
-		return dirty.replaceAll("\\.\\." + File.separator, "_");
+	public String makeSafePath(Path dirty) throws AppException {
+		Path normalizePath = dirty.normalize();
+		if (normalizePath.getParent().compareTo(Paths.get("temp", "upload")) == 0) {
+			return normalizePath.toString();
+		} else {
+			throw new AppException("createFile received invalid path");
+		}
+	}
+
+	private String validateFilename(String filename, String intendedDir) throws java.io.IOException {
+		File f = new File(filename);
+		String canonicalPath = f.getCanonicalPath();
+
+		File iD = new File(intendedDir);
+		String canonicalID = iD.getCanonicalPath();
+
+		if (canonicalPath.startsWith(canonicalID)) {
+			return canonicalPath;
+		} else {
+			throw new IllegalStateException("File is outside extraction target directory.");
+		}
 	}
 
 	/**
@@ -262,12 +293,13 @@ public class Project2 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute IDS04-J
 	 * 
-	 * @param str
+	 * @param fileName
 	 * @return String
 	 */
 	public String unzip(String fileName) throws AppException {
 		final int BUFFER = 512;
 		final int OVERFLOW = 0x1600000; // 25MB
+		int TOOMANY = 1024;      // Max number of files
 		Path zipPath = null;
 		try {
 			zipPath = Paths.get("temp", "zip", fileName);
@@ -280,24 +312,20 @@ public class Project2 extends Project {
 			try (ZipInputStream zis = new ZipInputStream(
 					new BufferedInputStream(fis))) {
 				ZipEntry entry;
-
+				int entries = 0;
+				long total = 0;
 				// go through each entry in the file
 				while ((entry = zis.getNextEntry()) != null) {
 					AppLogger.log("Extracting zip from filename: " + fileName);
 					int count;
 					byte data[] = new byte[BUFFER];
-					// avoid zip bombs by only allows reasonable size files
-					if (entry.getSize() > OVERFLOW) {
-						throw new IllegalStateException(
-								"zip file exceed max limit");
-					}
-					// look for illegal size which may be a hint something is
-					// wrong
-					if (entry.getSize() == -1) {
-						throw new IllegalStateException(
-								"zip file entry returned inconsistent size and may be a zip bomb");
-					}
 
+					String name = validateFilename(entry.getName(), zipPath.toString());
+					if (entry.isDirectory()) {
+						System.out.println("Creating directory " + name);
+						new File(name).mkdir();
+						continue;
+					}
 					// output file is path plus entry
 					Path entryPath = null;
 					try {
@@ -312,12 +340,20 @@ public class Project2 extends Project {
 							entryPath.toString())) {
 						try (BufferedOutputStream dest = new BufferedOutputStream(
 								fos, BUFFER)) {
-							while ((count = zis.read(data, 0, BUFFER)) != -1) {
+							while (total + BUFFER <= OVERFLOW && (count = zis.read(data, 0, BUFFER)) != -1) {
 								dest.write(data, 0, count);
+								total += count;
 							}
 							dest.flush();
 
 							zis.closeEntry();
+							entries++;
+							if (entries > TOOMANY) {
+								throw new IllegalStateException("Too many files to unzip.");
+							}
+							if (total + BUFFER > OVERFLOW) {
+								throw new IllegalStateException("File being unzipped is too big.");
+							}
 						} // end bufferedoutputstream
 					} // end fileoutputstream
 
@@ -360,6 +396,10 @@ public class Project2 extends Project {
 	 * @return String
 	 */
 	public String exec(String cmd) throws AppException {
+		if (!Pattern.matches("[0-9A-Za-z@.]+", cmd)) {
+			throw new AppException("Unsupported command");
+		}
+
 		// execute the OS command
 		try {
 			Runtime rt = Runtime.getRuntime();
@@ -401,10 +441,15 @@ public class Project2 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute IDS52-J
 	 * 
-	 * @param cmd
+	 * @param printMessage
 	 * @return String
 	 */
 	public String evalScript(String printMessage) throws AppException {
+		if (!printMessage.matches("[\\w]*")) {
+			// String does not match whitelisted characters
+			throw new AppException("Invalid message");
+		}
+
 		try {
 			ScriptEngineManager manager = new ScriptEngineManager();
 			ScriptEngine engine = manager.getEngineByName("javascript");
@@ -445,7 +490,7 @@ public class Project2 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute IDS16-J
 	 * 
-	 * @param str
+	 * @param partQuantity
 	 * @return String
 	 */
 	public String createXML(String partQuantity) throws AppException {
@@ -488,7 +533,7 @@ public class Project2 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute IDS16-J
 	 * 
-	 * @param str
+	 * @param xml
 	 * @return String
 	 */
 	public Document validateXML(String xml) throws AppException {
@@ -531,7 +576,7 @@ public class Project2 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute IDS17-J
 	 * 
-	 * @param str
+	 * @param xml
 	 * @return String
 	 */
 	public Document parseXML(String xml) throws AppException {
@@ -567,7 +612,7 @@ public class Project2 extends Project {
 	 * Source code from:
 	 * https://wiki.sei.cmu.edu/confluence/display/java/IDS53-J.+Prevent+XPath+Injection
 	 * 
-	 * @param str
+	 * @param userPass
 	 * @return boolean
 	 */
 	public boolean xpathLogin(String userPass) throws AppException {
@@ -638,7 +683,7 @@ public class Project2 extends Project {
 	 * 
 	 * REF: CMU Software Engineering Institute SER12-J
 	 * 
-	 * @param str
+	 * @param base64Str
 	 * @return String
 	 */
 	public Object deserializeObject(String base64Str) throws AppException {
@@ -746,7 +791,7 @@ public class Project2 extends Project {
 	 * 
 	 * Code copied from: https://rgagnon.com/javadetails/java-0596.html
 	 * 
-	 * @param b
+	 * @param password
 	 * @return String
 	 */
 	private static String encryptPassword(String password) throws AppException {
