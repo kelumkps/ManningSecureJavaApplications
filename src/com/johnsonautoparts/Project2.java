@@ -12,7 +12,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -24,9 +27,12 @@ import javax.script.ScriptException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.XMLConstants;
+import javax.xml.parsers.*;
+import javax.xml.transform.stream.StreamSource;
+import javax.xml.validation.Schema;
+import javax.xml.validation.SchemaFactory;
+import javax.xml.validation.Validator;
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathException;
@@ -35,8 +41,7 @@ import javax.xml.xpath.XPathFactory;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
-import org.xml.sax.InputSource;
-import org.xml.sax.SAXException;
+import org.xml.sax.*;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,6 +49,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.johnsonautoparts.exception.AppException;
 import com.johnsonautoparts.logger.AppLogger;
 import com.johnsonautoparts.servlet.SessionConstant;
+import org.xml.sax.helpers.DefaultHandler;
 
 /**
  * 
@@ -495,9 +501,10 @@ public class Project2 extends Project {
 	 */
 	public String createXML(String partQuantity) throws AppException {
 		// build the XML document
+		int count = Integer.parseUnsignedInt(partQuantity);
 		String xmlContent = "<?xml version=\"1.0\"?>" + "<item>\n"
 				+ "<title>Widget</title>\n" + "<price>500</price>\n"
-				+ "<quantity>" + partQuantity + "</quantity>" + "</item>";
+				+ "<quantity>" + count + "</quantity>" + "</item>";
 
 		// build the XML document from the string content
 		Document doc = null;
@@ -547,12 +554,19 @@ public class Project2 extends Project {
 					+ ipe.getMessage());
 		}
 
-		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		InputSource xmlStream = new InputSource(new StringReader(xml));
+		// Build a validating SAX parser using our schema
+		SchemaFactory sf = SchemaFactory
+				.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
 
 		// the code for this XML parse is very rudimentary but is here for
 		// demonstration
 		// purposes to work with XML schema validation
 		try {
+			Schema schema = sf.newSchema(xsdPath.toFile());
+			Validator validator = schema.newValidator();
+			validator.validate(new StreamSource(xmlStream.getByteStream()));
+			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 			DocumentBuilder builder = factory.newDocumentBuilder();
 			InputSource is = new InputSource(xml);
 			return builder.parse(is);
@@ -586,6 +600,12 @@ public class Project2 extends Project {
 		// demonstration
 		// purposes to configure the parse to avoid XEE attacks
 		try {
+			factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+			factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+			factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+			factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+			factory.setXIncludeAware(false);
+			factory.setExpandEntityReferences(false);
 			DocumentBuilder builder = factory.newDocumentBuilder();
 			InputSource is = new InputSource(xml);
 			return builder.parse(is);
@@ -705,9 +725,10 @@ public class Project2 extends Project {
 		// deserialize the object
 		try (ByteArrayInputStream bais = new ByteArrayInputStream(
 				decodedBytes)) {
+			Set<String> whitelist = new HashSet<>(Arrays.asList("GoodClass1","GoodClass2"));
 
 			// wrap the OIS in the try to autoclose
-			try (ObjectInputStream ois = new ObjectInputStream(bais)) {
+			try (WhitelistedObjectInputStream ois = new WhitelistedObjectInputStream(bais, whitelist)) {
 				return ois.readObject();
 			} catch (StreamCorruptedException sce) {
 				throw new AppException(
@@ -740,7 +761,7 @@ public class Project2 extends Project {
 	 * @param data String of the json to deserialize
 	 * @return Object to deserialize
 	 */
-	public Object deserializeJson(String data) throws AppException {
+	public User deserializeJson(String data) throws AppException {
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.enableDefaultTyping();
 
@@ -750,7 +771,7 @@ public class Project2 extends Project {
 
 		// deserialize the object and return
 		try {
-			return (User) mapper.readValue(data, Object.class);
+			return mapper.readValue(data, User.class);
 		} catch (IOException ioe) {
 			throw new AppException("deserializationJson caught IOException: "
 					+ ioe.getMessage());
@@ -818,4 +839,21 @@ public class Project2 extends Project {
 
 	}
 
+}
+
+class WhitelistedObjectInputStream extends ObjectInputStream {
+	public Set<String> whitelist;
+
+	public WhitelistedObjectInputStream(InputStream inputStream, Set<String> wl) throws IOException {
+		super(inputStream);
+		whitelist = wl;
+	}
+
+	@Override
+	protected Class<?> resolveClass(ObjectStreamClass cls) throws IOException, ClassNotFoundException {
+		if (!whitelist.contains(cls.getName())) {
+			throw new InvalidClassException("Unexpected serialized class", cls.getName());
+		}
+		return super.resolveClass(cls);
+	}
 }
