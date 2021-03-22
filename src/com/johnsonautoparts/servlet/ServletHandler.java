@@ -67,33 +67,7 @@ public class ServletHandler extends HttpServlet {
 	/**
 	 * Out of band used test functions of WAR
 	 */
-	public static void main(String[] args) {
-		if (!(args.length > 0)) {
-			System.err.println("Missing argument");
-			System.exit(1);
-		}
 
-		switch (args[0]) {
-			case "database" :
-				try {
-					Connection connection = DB.getDbConnection(null);
-					try (PreparedStatement stmt = connection
-							.prepareStatement("SELECT COUNT(*) FROM tasks")) {
-						// do nothing
-					}
-				} catch (DBException dbe) {
-					dbe.printStackTrace();
-				} catch (SQLException sqe) {
-					sqe.printStackTrace();
-				}
-
-				break;
-
-			default :
-				System.err.println("Function " + args[0] + " not implemented");
-				System.exit(1);
-		}
-	}
 
 	/**
 	 * Handle POST request

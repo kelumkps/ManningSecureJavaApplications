@@ -43,8 +43,16 @@
 			 * The JSP rectries the parameter blog and places the data into the text area for review by
 			 * the user so they can make edits before submitting the data.
 			 */
+			    String blogStr = request.getParameter("blog");
+			    if (blogStr == null) blogStr = "";
+                PolicyFactory policyFactory = new HtmlPolicyBuilder()
+                    .allowElements(ElementPolicy.IDENTITY_ELEMENT_POLICY,
+                        "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li",
+                        "blockquote", "pre")
+                    .toFactory();
+                blogStr = policyFactory.sanitize(blogStr);
 			%>
-		<tr><td><textarea name='param1'><%= request.getParameter("blog") %></textarea>
+		<tr><td><textarea name='param1'><%= blogStr %></textarea>
 		<tr><td><br/></td></tr>
 			</table>
 		<input type='hidden' name='project' value='project4'/>

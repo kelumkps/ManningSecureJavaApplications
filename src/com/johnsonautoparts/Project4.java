@@ -60,6 +60,7 @@ import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.FileUploadException;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
+import org.apache.tika.Tika;
 import org.owasp.encoder.Encode;
 import org.w3c.dom.Document;
 import org.xml.sax.SAXException;
@@ -109,6 +110,7 @@ public class Project4 extends Project {
 	public String loginXml(String username, String password, String secureForm)
 			throws AppException {
 		// Project2 object for xPath login
+		secureForm = Encode.forJavaScriptBlock(Encode.forHtml(Normalizer.normalize(secureForm, Form.NFKC)));
 		Project2 project2 = new Project2(connection, httpRequest, httpResponse);
 		String userPass = username + ":" + password;
 
@@ -202,6 +204,11 @@ public class Project4 extends Project {
 				}
 
 				fi.write(filePath.toFile());
+				Tika tika = new Tika();
+				if(!"application/pdf".equals(tika.detect(filePath))) {
+					throw new AppException("File is not a pdf");
+				}
+
 			} // end while to process FileItems
 
 			// all files uploaded successfully
@@ -238,7 +245,7 @@ public class Project4 extends Project {
 	 * @param field
 	 * @return String
 	 */
-	public String getAttribute(String field) {
+	public String getAttribute(String field) throws AppException {
 		try {
 			String normField = Normalizer.normalize(field, Form.NFKC);
 			String txtField = normField.replaceAll("\\^[0-9A-Za-z_]", "");
@@ -252,15 +259,7 @@ public class Project4 extends Project {
 								+ txtField);
 			}
 		} catch (IllegalStateException ise) {
-			// convert the printstack to a string for better debugging
-			StringWriter sw = new StringWriter();
-			PrintWriter pw = new PrintWriter(sw);
-
-			// call printStackTrace to the print/string
-			ise.printStackTrace(pw);
-
-			// return the error as the content
-			return sw.toString();
+			throw new AppException("Error while getAttribute " + ise.getMessage());
 		}
 
 	}
