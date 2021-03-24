@@ -287,9 +287,9 @@ public class ServletHandler extends HttpServlet {
 				 * also be leaked.
 				 */
 				// nothing matched so process as a GET
-				AppLogger.log("Cannot process POST request, forwarding to GET");
-				doGet(request, response);
-
+				AppLogger.log("Cannot process POST request, unknown action");
+				response.setStatus(HttpServletResponse.SC_NOT_IMPLEMENTED);
+				ServletUtilities.sendError(response, "Unsupported action");
 				break;
 		}
 
@@ -414,7 +414,8 @@ public class ServletHandler extends HttpServlet {
 		// throw ServletException for processing
 		catch (AppException ae) {
 			AppLogger.log("Caught AppException: " + ae.getPrivateMessage());
-			throw new ServletException(ae.getPrivateMessage());
+			response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+			ServletUtilities.sendError(response, ae.getMessage());
 		}
 
 	}

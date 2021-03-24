@@ -17,14 +17,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.Normalizer;
 import java.text.Normalizer.Form;
-import java.util.Base64;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Hashtable;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.*;
 
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
@@ -384,10 +377,15 @@ public class Project4 extends Project {
 	 * @param header
 	 * @return String
 	 */
-	public String addHeader(String header) {
-		httpResponse.addHeader("X-Header", header);
+	public String addHeader(String header) throws AppException {
+		List<String> allowedHeaders = Arrays.asList("header1", "header2", "header3");
 
-		return header;
+		if (allowedHeaders.contains(header)) {
+			httpResponse.addHeader("X-Header", header);
+			return header;
+		} {
+			throw new AppException("Header is not allowed");
+		}
 	}
 
 	/**
@@ -449,7 +447,7 @@ public class Project4 extends Project {
 
 		try {
 			String sql = "INSERT INTO COMMENTS(comments) VALUES (?)";
-
+			comments = comments != null ? Encode.forJavaScriptBlock(Encode.forHtml(comments)) : "";
 			try (PreparedStatement stmt = connection.prepareStatement(sql)) {
 				stmt.setString(1, comments);
 
@@ -495,6 +493,7 @@ public class Project4 extends Project {
 	 */
 	public void redirectUser(String location) throws AppException {
 		try {
+			location = location != null ? Encode.forJavaScriptBlock(Encode.forHtml(location)) : "";
 			httpResponse.sendRedirect(location);
 		} catch (IOException e) {
 			throw new AppException(
